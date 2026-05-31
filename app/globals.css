@@ -87,3 +87,9 @@ td small { display: block; color: #64748b; margin-top: 3px; max-width: 360px; ov
 .mobile-tabs button { border: 0; border-radius: 999px; background: #eff6ff; color: #2563eb; padding: 10px 14px; font-weight: 850; }
 @media (max-width: 1100px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } .grid-two { grid-template-columns: 1fr; } }
 @media (max-width: 800px) { .sidebar { display: none; } .mobile-tabs { display: flex; } .topbar { flex-direction: column; align-items: stretch; padding: 16px; } .page-content { padding: 16px; } .stats-grid, .form-grid, .calendar-grid { grid-template-columns: 1fr; } .inline-form { flex-direction: column; } table { min-width: 720px; } }
+.remark-input { min-height: 76px; min-width: 220px; border-radius: 14px; padding: 10px 12px; }
+.save-note { display: block; margin-top: 6px; color: #2563eb; font-weight: 800; }
+.row-actions { display: grid; gap: 6px; }
+.small-btn.danger { background: #dc2626; }
+.small-btn.danger:hover { background: #b91c1c; }
+@media (max-width: 800px) { .remark-input { min-width: 190px; } }
