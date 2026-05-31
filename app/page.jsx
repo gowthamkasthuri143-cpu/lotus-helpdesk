@@ -23,7 +23,13 @@ const priorities = ["Low", "Medium", "High", "Emergency"];
 const statuses = ["Pending", "Assigned", "In Progress", "Waiting for User", "Solved", "Closed"];
 
 async function api(path, options = {}) {
-  const res = await fetch(path, options);
+  const res = await fetch(path, {
+    ...options,
+    credentials: "include",
+    headers: options.body instanceof FormData
+      ? options.headers
+      : { ...(options.headers || {}) },
+  });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Something went wrong");
   return data;
@@ -63,6 +69,7 @@ function LoginScreen({ onLogin }) {
         body: JSON.stringify({ userId, password, role }),
       });
       onLogin(data.user);
+      window.setTimeout(() => window.location.reload(), 250);
     } catch (err) {
       setError(err.message);
     } finally {
