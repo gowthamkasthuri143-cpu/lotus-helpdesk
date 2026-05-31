@@ -99,8 +99,8 @@ function Sidebar({ user, page, setPage, logout }) {
     ["dashboard", LayoutDashboard, "Dashboard"],
     ["tickets", Ticket, "All Tickets"],
     ["calendar", CalendarDays, "Calendar"],
-    ["departments", Settings, "Departments"],
-    ["users", Users, "Users"],
+    ["departments", Settings, "Department Management"],
+    ["users", Users, "User Management"],
   ];
   const userMenu = [
     ["dashboard", LayoutDashboard, "Dashboard"],
@@ -242,6 +242,88 @@ function RaiseTicket({ departments, user, reloadTickets, setPage }) {
   );
 }
 
+function AdminTicketRow({ ticket, technicians, updateTicket }) {
+  const [status, setStatus] = useState(ticket.status || "Pending");
+  const [assignedTo, setAssignedTo] = useState(ticket.assigned_to || "");
+  const [remark, setRemark] = useState(ticket.admin_remark || "");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+
+  async function save() {
+    try {
+      setSaving(true);
+      setMessage("");
+      await updateTicket(ticket.id, {
+        status,
+        assigned_to: assignedTo,
+        admin_remark: remark,
+        comment: remark || `Status changed to ${status}`,
+      });
+      setMessage("Saved");
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <tr>
+      <td className="ticket-no">{ticket.ticket_number}</td>
+      <td>{ticket.departmentName}</td>
+      <td><b>{ticket.complaint_type}</b><small>{ticket.description}</small></td>
+      <td><Badge type={ticket.priority}>{ticket.priority}</Badge></td>
+      <td><select value={status} onChange={(e) => setStatus(e.target.value)}>{statuses.map((s) => <option key={s}>{s}</option>)}</select></td>
+      <td><select value={assignedTo} onChange={(e) => { setAssignedTo(e.target.value); if (e.target.value && status === "Pending") setStatus("Assigned"); }}><option value="">Unassigned</option>{technicians.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></td>
+      <td><textarea className="remark-input" value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="Admin remark / work note" /></td>
+      <td>{ticket.attachments?.length ? <a href={ticket.attachments[0].file_url} target="_blank">View</a> : "-"}</td>
+      <td><button className="small-btn" onClick={save} disabled={saving}>{saving ? "Saving" : "Save"}</button>{message && <small className="save-note">{message}</small>}</td>
+    </tr>
+  );
+}
+
+function TechnicianTicketRow({ ticket, updateTicket }) {
+  const [status, setStatus] = useState(ticket.status || "Assigned");
+  const [remark, setRemark] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+
+  async function save() {
+    if (status === "Solved" && !remark.trim()) {
+      setMessage("Solved panna remark compulsory.");
+      return;
+    }
+    try {
+      setSaving(true);
+      setMessage("");
+      await updateTicket(ticket.id, {
+        status,
+        admin_remark: remark || ticket.admin_remark || "",
+        comment: remark || `Technician changed status to ${status}`,
+      });
+      setRemark("");
+      setMessage("Updated");
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <tr>
+      <td className="ticket-no">{ticket.ticket_number}</td>
+      <td>{ticket.departmentName}</td>
+      <td><b>{ticket.complaint_type}</b><small>{ticket.description}</small></td>
+      <td><Badge type={ticket.priority}>{ticket.priority}</Badge></td>
+      <td><select value={status} onChange={(e) => setStatus(e.target.value)}>{statuses.map((s) => <option key={s}>{s}</option>)}</select></td>
+      <td><textarea className="remark-input" value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="Work done / solved remark type pannunga" />{ticket.admin_remark && <small>Last remark: {ticket.admin_remark}</small>}</td>
+      <td>{ticket.attachments?.length ? <a href={ticket.attachments[0].file_url} target="_blank">View</a> : "-"}</td>
+      <td><button className="small-btn" onClick={save} disabled={saving}>{saving ? "Saving" : "Save"}</button>{message && <small className="save-note">{message}</small>}</td>
+    </tr>
+  );
+}
+
 function TicketsPage({ tickets, user, users, reloadTickets }) {
   const [status, setStatus] = useState("All");
   const technicians = users.filter((u) => u.role === "technician" && u.status === "Active");
@@ -252,19 +334,33 @@ function TicketsPage({ tickets, user, users, reloadTickets }) {
     await reloadTickets();
   }
 
+  if (user.role === "user") {
+    return (
+      <div className="page-content">
+        <section className="panel">
+          <div className="panel-head"><h3>My Tickets</h3><select value={status} onChange={(e) => setStatus(e.target.value)}><option>All</option>{statuses.map((s) => <option key={s}>{s}</option>)}</select></div>
+          <TicketTable tickets={visible} admin={false} />
+        </section>
+      </div>
+    );
+  }
+
+  if (user.role === "technician") {
+    return (
+      <div className="page-content">
+        <section className="panel">
+          <div className="panel-head"><div><h3>Assigned Tickets</h3><p className="muted">Ticket solve pannumbodhu remark add pannunga.</p></div><select value={status} onChange={(e) => setStatus(e.target.value)}><option>All</option>{statuses.map((s) => <option key={s}>{s}</option>)}</select></div>
+          <div className="table-wrap"><table><thead><tr><th>Ticket ID</th><th>Dept</th><th>Problem</th><th>Priority</th><th>Status</th><th>Technician Remark</th><th>Photo</th><th>Action</th></tr></thead><tbody>{visible.map((t) => <TechnicianTicketRow key={t.id} ticket={t} updateTicket={updateTicket} />)}</tbody></table>{!visible.length && <div className="empty">No tickets found.</div>}</div>
+        </section>
+      </div>
+    );
+  }
+
   return (
     <div className="page-content">
       <section className="panel">
-        <div className="panel-head"><h3>{user.role === "admin" ? "All Tickets" : user.role === "technician" ? "Assigned Tickets" : "My Tickets"}</h3><select value={status} onChange={(e) => setStatus(e.target.value)}><option>All</option>{statuses.map((s) => <option key={s}>{s}</option>)}</select></div>
-        {user.role !== "admin" ? <TicketTable tickets={visible} admin={user.role !== "user"} onUpdate={user.role === "technician" ? updateTicket : null} /> : (
-          <div className="table-wrap"><table><thead><tr><th>Ticket ID</th><th>Dept</th><th>Problem</th><th>Priority</th><th>Status</th><th>Assign</th><th>Photo</th></tr></thead><tbody>{visible.map((t) => <tr key={t.id}>
-            <td className="ticket-no">{t.ticket_number}</td><td>{t.departmentName}</td><td><b>{t.complaint_type}</b><small>{t.description}</small></td>
-            <td><Badge type={t.priority}>{t.priority}</Badge></td>
-            <td><select value={t.status} onChange={(e) => updateTicket(t.id, { status: e.target.value })}>{statuses.map((s) => <option key={s}>{s}</option>)}</select></td>
-            <td><select value={t.assigned_to || ""} onChange={(e) => updateTicket(t.id, { assigned_to: e.target.value, status: e.target.value ? "Assigned" : t.status })}><option value="">Unassigned</option>{technicians.map((x) => <option key={x.id} value={x.id}>{x.name}</option>)}</select></td>
-            <td>{t.attachments?.length ? <a href={t.attachments[0].file_url} target="_blank">View</a> : "-"}</td>
-          </tr>)}</tbody></table>{!visible.length && <div className="empty">No tickets found.</div>}</div>
-        )}
+        <div className="panel-head"><div><h3>All Tickets</h3><p className="muted">Assign technician, update status, and add admin/technician remarks.</p></div><select value={status} onChange={(e) => setStatus(e.target.value)}><option>All</option>{statuses.map((s) => <option key={s}>{s}</option>)}</select></div>
+        <div className="table-wrap"><table><thead><tr><th>Ticket ID</th><th>Dept</th><th>Problem</th><th>Priority</th><th>Status</th><th>Assign</th><th>Remark</th><th>Photo</th><th>Action</th></tr></thead><tbody>{visible.map((t) => <AdminTicketRow key={t.id} ticket={t} technicians={technicians} updateTicket={updateTicket} />)}</tbody></table>{!visible.length && <div className="empty">No tickets found.</div>}</div>
       </section>
     </div>
   );
@@ -325,7 +421,50 @@ function UsersPage({ departments, users, reloadUsers }) {
     } catch (err) { setMessage(err.message); }
   }
 
-  return <div className="page-content"><section className="panel"><h3>Users Management</h3><p className="muted">Admin creates User ID + Password. Email login illa.</p><div className="form-grid"><input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /><input placeholder="User ID" value={form.user_id} onChange={(e) => setForm({ ...form, user_id: e.target.value })} /><input placeholder="Password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /><select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}><option value="user">User</option><option value="admin">Admin</option><option value="technician">Technician</option></select><select value={form.department_id} onChange={(e) => setForm({ ...form, department_id: e.target.value })}>{departments.map((d) => <option key={d.id} value={d.id}>{d.department_name}</option>)}</select><input placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div><button className="primary-btn" onClick={createUser}>Create User</button>{message && <div className="alert">{message}</div>}<div className="table-wrap"><table><thead><tr><th>Name</th><th>User ID</th><th>Role</th><th>Department</th><th>Status</th></tr></thead><tbody>{users.map((u) => <tr key={u.id}><td>{u.name}</td><td>{u.user_id}</td><td><Badge type={u.role}>{u.role}</Badge></td><td>{u.departments?.department_name || "-"}</td><td><Badge type={u.status}>{u.status}</Badge></td></tr>)}</tbody></table></div></section></div>;
+  return <div className="page-content"><section className="panel"><h3>Users Management</h3><p className="muted">Admin creates and edits User ID + Password. Email login illa.</p><div className="form-grid"><input placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} /><input placeholder="User ID" value={form.user_id} onChange={(e) => setForm({ ...form, user_id: e.target.value })} /><input placeholder="Password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} /><select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}><option value="user">User</option><option value="admin">Admin</option><option value="technician">Technician</option></select><select value={form.department_id} onChange={(e) => setForm({ ...form, department_id: e.target.value })}>{departments.map((d) => <option key={d.id} value={d.id}>{d.department_name}</option>)}</select><input placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div><button className="primary-btn" onClick={createUser}>Create User</button>{message && <div className="alert">{message}</div>}<div className="table-wrap"><table><thead><tr><th>Name</th><th>User ID</th><th>New Password</th><th>Role</th><th>Department</th><th>Phone</th><th>Status</th><th>Action</th></tr></thead><tbody>{users.map((u) => <UserRow key={u.id} u={u} departments={departments} reloadUsers={reloadUsers} />)}</tbody></table></div></section></div>;
+}
+
+function UserRow({ u, departments, reloadUsers }) {
+  const [edit, setEdit] = useState({
+    name: u.name || "",
+    user_id: u.user_id || "",
+    password: "",
+    role: u.role || "user",
+    department_id: u.department_id || "",
+    phone: u.phone || "",
+    status: u.status || "Active",
+  });
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+
+  async function saveUser() {
+    try {
+      setSaving(true);
+      setMessage("");
+      const body = { ...edit };
+      if (!body.password) delete body.password;
+      await api(`/api/users/${u.id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      setEdit((prev) => ({ ...prev, password: "" }));
+      setMessage("Saved");
+      await reloadUsers();
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function deleteUser() {
+    if (!confirm("Delete this user?")) return;
+    try {
+      await api(`/api/users/${u.id}`, { method: "DELETE" });
+      await reloadUsers();
+    } catch (err) {
+      setMessage(err.message);
+    }
+  }
+
+  return <tr><td><input value={edit.name} onChange={(e) => setEdit({ ...edit, name: e.target.value })} /></td><td><input value={edit.user_id} onChange={(e) => setEdit({ ...edit, user_id: e.target.value })} /></td><td><input value={edit.password} onChange={(e) => setEdit({ ...edit, password: e.target.value })} placeholder="Leave blank" /></td><td><select value={edit.role} onChange={(e) => setEdit({ ...edit, role: e.target.value })}><option value="user">User</option><option value="admin">Admin</option><option value="technician">Technician</option></select></td><td><select value={edit.department_id} onChange={(e) => setEdit({ ...edit, department_id: e.target.value })}><option value="">No Department</option>{departments.map((d) => <option key={d.id} value={d.id}>{d.department_name}</option>)}</select></td><td><input value={edit.phone} onChange={(e) => setEdit({ ...edit, phone: e.target.value })} /></td><td><select value={edit.status} onChange={(e) => setEdit({ ...edit, status: e.target.value })}><option>Active</option><option>Inactive</option></select></td><td><div className="row-actions"><button className="small-btn" onClick={saveUser} disabled={saving}>{saving ? "Saving" : "Save"}</button><button className="small-btn danger" onClick={deleteUser}>Delete</button>{message && <small>{message}</small>}</div></td></tr>;
 }
 
 export default function App() {
@@ -366,7 +505,7 @@ export default function App() {
       <Sidebar user={user} page={page} setPage={setPage} logout={logout} />
       <main>
         <Header user={user} tickets={filteredTickets} setSearch={setSearch} />
-        <div className="mobile-tabs"><button onClick={() => setPage("dashboard")}>Dashboard</button>{user.role === "user" && <button onClick={() => setPage("raise")}>Raise</button>}<button onClick={() => setPage("tickets")}>Tickets</button><button onClick={() => setPage("calendar")}>Calendar</button></div>
+        <div className="mobile-tabs"><button onClick={() => setPage("dashboard")}>Dashboard</button>{user.role === "user" && <button onClick={() => setPage("raise")}>Raise</button>}<button onClick={() => setPage("tickets")}>Tickets</button><button onClick={() => setPage("calendar")}>Calendar</button>{user.role === "admin" && <button onClick={() => setPage("departments")}>Departments</button>}{user.role === "admin" && <button onClick={() => setPage("users")}>Users</button>}</div>
         {page === "dashboard" && <Dashboard user={user} tickets={filteredTickets} setPage={setPage} />}
         {page === "raise" && <RaiseTicket departments={departments} user={user} reloadTickets={reloadTickets} setPage={setPage} />}
         {page === "tickets" && <TicketsPage tickets={filteredTickets} user={user} users={users} reloadTickets={reloadTickets} />}
